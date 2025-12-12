@@ -38,6 +38,12 @@ const teamMemberSchema = new mongoose.Schema({
   imagePublicId: { type: String, required: true },
   position: { type: String, required: true, trim: true },
   information: { type: String, required: true, trim: true },
+  team: { 
+    type: String, 
+    required: true, 
+    enum: ['AllInvestment Team', 'Operations Team', 'Advisory Board'],
+    trim: true 
+  },
   uploadDate: { type: Date, default: Date.now },
 }, { timestamps: true });
 
@@ -143,7 +149,7 @@ app.post("/team/upload", checkDbConnection, uploadImage.single("image"), async (
   }
 
   try {
-    const { name, firstName, lastName, position, information } = req.body;
+    const { name, firstName, lastName, position, information, team } = req.body;
 
     if (!name && (!firstName || !lastName)) {
       return res.status(400).json({ error: "Name or firstName and lastName are required" });
@@ -157,6 +163,18 @@ app.post("/team/upload", checkDbConnection, uploadImage.single("image"), async (
       return res.status(400).json({ error: "Information/summary is required" });
     }
 
+    if (!team) {
+      return res.status(400).json({ error: "Team is required" });
+    }
+
+    // Validate team value
+    const validTeams = ['AllInvestment Team', 'Operations Team', 'Advisory Board'];
+    if (!validTeams.includes(team)) {
+      return res.status(400).json({ 
+        error: "Invalid team value. Must be one of: 'AllInvestment Team', 'Operations Team', 'Advisory Board'" 
+      });
+    }
+
     const newTeamMember = new TeamMember({
       name: name?.trim() || `${firstName?.trim()} ${lastName?.trim()}`,
       firstName: firstName?.trim() || '',
@@ -165,10 +183,11 @@ app.post("/team/upload", checkDbConnection, uploadImage.single("image"), async (
       imagePublicId: req.file.filename,
       position: position.trim(),
       information: information.trim(),
+      team: team.trim(),
     });
 
     await newTeamMember.save();
-    console.log(`✅ Team member created: ${newTeamMember._id}`);
+    console.log(`✅ Team member created: ${newTeamMember._id} (Team: ${team})`);
 
     res.status(201).json({
       message: "Team member created successfully!",
@@ -181,10 +200,20 @@ app.post("/team/upload", checkDbConnection, uploadImage.single("image"), async (
   }
 });
 
-// GET All Team Members
+// GET All Team Members (with optional team filter)
 app.get("/team", checkDbConnection, async (req, res) => {
   try {
-    const teamMembers = await TeamMember.find().sort({ uploadDate: -1 });
+    const { team } = req.query;
+    
+    let filter = {};
+    if (team) {
+      filter.team = team;
+    }
+    
+    const teamMembers = await TeamMember.find(filter).sort({ uploadDate: -1 });
+    
+    console.log(`📋 Fetched ${teamMembers.length} team members${team ? ` (Team: ${team})` : ''}`);
+    
     res.json({ teamMembers });
   } catch (error) {
     console.error('❌ Error fetching team members:', error);
@@ -211,7 +240,7 @@ app.put("/team/:id", checkDbConnection, uploadImage.single("image"), async (req,
   console.log(`✏️ Editing team member: ${req.params.id}`);
   
   try {
-    const { name, firstName, lastName, position, information } = req.body;
+    const { name, firstName, lastName, position, information, team } = req.body;
     const teamMember = await TeamMember.findById(req.params.id);
 
     if (!teamMember) {
@@ -224,6 +253,17 @@ app.put("/team/:id", checkDbConnection, uploadImage.single("image"), async (req,
     if (lastName !== undefined) teamMember.lastName = lastName.trim();
     if (position !== undefined) teamMember.position = position.trim();
     if (information !== undefined) teamMember.information = information.trim();
+    
+    // Update team if provided
+    if (team !== undefined) {
+      const validTeams = ['AllInvestment Team', 'Operations Team', 'Advisory Board'];
+      if (!validTeams.includes(team)) {
+        return res.status(400).json({ 
+          error: "Invalid team value. Must be one of: 'AllInvestment Team', 'Operations Team', 'Advisory Board'" 
+        });
+      }
+      teamMember.team = team.trim();
+    }
 
     // Update image if new one is uploaded
     if (req.file) {
@@ -234,7 +274,7 @@ app.put("/team/:id", checkDbConnection, uploadImage.single("image"), async (req,
     }
 
     await teamMember.save();
-    console.log(`✅ Team member updated: ${req.params.id}`);
+    console.log(`✅ Team member updated: ${req.params.id} (Team: ${teamMember.team})`);
 
     res.json({ 
       message: "Team member updated successfully", 
@@ -586,7 +626,8 @@ const server = app.listen(PORT, () => {
   console.log(`\n🚀 Greenhall Capital Server Running!`);
   console.log(`🌐 Server listening on port ${PORT}`);
   console.log(`\n📋 Endpoints:`);
-  console.log(' ✅ Team Members: POST/GET/PUT/DELETE /team');
+  console.log(' ✅ Team Members: POST/GET/PUT/DELETE /team (Filter by ?team=value)');
+  console.log('    Valid teams: AllInvestment Team, Operations Team, Advisory Board');
   console.log(' ✅ News: POST/GET/PUT/DELETE /news');
   console.log(' ✅ Portfolio: POST/GET/PUT/DELETE /portfolio');
   console.log('\n✏️  All resources support full EDIT functionality via PUT');
