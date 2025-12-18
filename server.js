@@ -44,6 +44,7 @@ const teamMemberSchema = new mongoose.Schema({
     enum: ['AllInvestment Team', 'Operations Team', 'Advisory Board'],
     trim: true 
   },
+  order: { type: Number, default: 999 }, // Lower numbers appear first
   uploadDate: { type: Date, default: Date.now },
 }, { timestamps: true });
 
@@ -149,7 +150,7 @@ app.post("/team/upload", checkDbConnection, uploadImage.single("image"), async (
   }
 
   try {
-    const { name, firstName, lastName, position, information, team } = req.body;
+    const { name, firstName, lastName, position, information, team, order } = req.body;
 
     if (!name && (!firstName || !lastName)) {
       return res.status(400).json({ error: "Name or firstName and lastName are required" });
@@ -184,10 +185,11 @@ app.post("/team/upload", checkDbConnection, uploadImage.single("image"), async (
       position: position.trim(),
       information: information.trim(),
       team: team.trim(),
+      order: order ? parseInt(order) : 999, // Default to 999 if not provided
     });
 
     await newTeamMember.save();
-    console.log(`✅ Team member created: ${newTeamMember._id} (Team: ${team})`);
+    console.log(`✅ Team member created: ${newTeamMember._id} (Team: ${team}, Order: ${newTeamMember.order})`);
 
     res.status(201).json({
       message: "Team member created successfully!",
@@ -200,7 +202,7 @@ app.post("/team/upload", checkDbConnection, uploadImage.single("image"), async (
   }
 });
 
-// GET All Team Members (with optional team filter)
+// GET All Team Members (with optional team filter, sorted by order)
 app.get("/team", checkDbConnection, async (req, res) => {
   try {
     const { team } = req.query;
@@ -210,7 +212,8 @@ app.get("/team", checkDbConnection, async (req, res) => {
       filter.team = team;
     }
     
-    const teamMembers = await TeamMember.find(filter).sort({ uploadDate: -1 });
+    // Sort by order (ascending), then by uploadDate (descending) as fallback
+    const teamMembers = await TeamMember.find(filter).sort({ order: 1, uploadDate: -1 });
     
     console.log(`📋 Fetched ${teamMembers.length} team members${team ? ` (Team: ${team})` : ''}`);
     
@@ -240,7 +243,7 @@ app.put("/team/:id", checkDbConnection, uploadImage.single("image"), async (req,
   console.log(`✏️ Editing team member: ${req.params.id}`);
   
   try {
-    const { name, firstName, lastName, position, information, team } = req.body;
+    const { name, firstName, lastName, position, information, team, order } = req.body;
     const teamMember = await TeamMember.findById(req.params.id);
 
     if (!teamMember) {
@@ -265,6 +268,11 @@ app.put("/team/:id", checkDbConnection, uploadImage.single("image"), async (req,
       teamMember.team = team.trim();
     }
 
+    // Update order if provided
+    if (order !== undefined) {
+      teamMember.order = parseInt(order);
+    }
+
     // Update image if new one is uploaded
     if (req.file) {
       console.log('🖼️ Replacing team member image');
@@ -274,7 +282,7 @@ app.put("/team/:id", checkDbConnection, uploadImage.single("image"), async (req,
     }
 
     await teamMember.save();
-    console.log(`✅ Team member updated: ${req.params.id} (Team: ${teamMember.team})`);
+    console.log(`✅ Team member updated: ${req.params.id} (Team: ${teamMember.team}, Order: ${teamMember.order})`);
 
     res.json({ 
       message: "Team member updated successfully", 
@@ -628,6 +636,7 @@ const server = app.listen(PORT, () => {
   console.log(`\n📋 Endpoints:`);
   console.log(' ✅ Team Members: POST/GET/PUT/DELETE /team (Filter by ?team=value)');
   console.log('    Valid teams: AllInvestment Team, Operations Team, Advisory Board');
+  console.log('    🔢 Supports order field - lower numbers appear first');
   console.log(' ✅ News: POST/GET/PUT/DELETE /news');
   console.log(' ✅ Portfolio: POST/GET/PUT/DELETE /portfolio');
   console.log('\n✏️  All resources support full EDIT functionality via PUT');
