@@ -24,7 +24,7 @@ cloudinary.config({
 });
 
 // --- MONGODB CONFIGURATION ---
-const MONGODB_URI = "mongodb+srv://greenhallsite_db_user:greenhallsite_db_password@cluster0.m1zcxjk.mongodb.net/?appName=Cluster0";
+const MONGODB_URI = "mongodb+srv://greenhalldb_db_user:greenhalldb_db_password@cluster0.ah3jgnf.mongodb.net/?appName=Cluster0";
 const PORT = process.env.PORT || 5001;
 
 // --- MONGOOSE SCHEMAS ---
